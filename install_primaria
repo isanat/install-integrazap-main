@@ -90,7 +90,19 @@ system_create_user
 # backend related
 system_git_clone
 backend_set_env
-backend_redis_create
+
+# Criar banco de dados MySQL (substituindo o backend_redis_create anterior)
+backend_mysql_create() {
+  echo "Criando banco de dados MySQL e usuário..."
+  sudo mysql -u root -p${mysql_root_password} <<MYSQL_SCRIPT
+CREATE DATABASE IF NOT EXISTS ${instancia_add};
+CREATE USER IF NOT EXISTS '${instancia_add}'@'localhost' IDENTIFIED BY '${db_pass}';
+GRANT ALL PRIVILEGES ON ${instancia_add}.* TO '${instancia_add}'@'localhost';
+FLUSH PRIVILEGES;
+MYSQL_SCRIPT
+}
+backend_mysql_create
+
 backend_node_dependencies
 backend_node_build
 backend_db_migrate
@@ -116,3 +128,4 @@ if ! sudo certbot certificates > /dev/null 2>&1; then
 else
   echo "Certbot já configurado."
 fi
+
