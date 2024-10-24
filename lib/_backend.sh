@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # functions for setting up app backend
+
 #######################################
 # creates REDIS db using docker
 # Arguments:
@@ -8,27 +9,28 @@
 #######################################
 backend_redis_create() {
   print_banner
-  printf "${WHITE} 💻 Criando Redis & Banco Postgres...${GRAY_LIGHT}"
+  printf "${WHITE} 💻 Criando Redis & Banco MySQL...${GRAY_LIGHT}"
   printf "\n\n"
 
   sleep 2
 
-  sudo su - root <<EOF
-  usermod -aG docker deploy
-  docker run --name redis-${instancia_add} -p ${redis_port}:6379 --restart always --detach redis redis-server --requirepass ${mysql_root_password}
-  
-  sleep 2
-  sudo su - postgres
-  createdb ${instancia_add};
-  psql
-  CREATE USER ${instancia_add} SUPERUSER INHERIT CREATEDB CREATEROLE;
-  ALTER USER ${instancia_add} PASSWORD '${mysql_root_password}';
-  \q
-  exit
+  # Verificar se Redis já está em execução
+  if ! docker ps | grep redis-${instancia_add} > /dev/null 2>&1; then
+    printf "${GREEN}Iniciando Redis container...${NC}\n"
+    docker run --name redis-${instancia_add} -p ${redis_port}:6379 --restart always --detach redis redis-server --requirepass ${mysql_root_password}
+  else
+    printf "${YELLOW}Redis container já está rodando.${NC}\n"
+  fi
+
+  # Criar banco de dados e usuário MySQL
+  mysql -u root -p${mysql_root_password} <<EOF
+  CREATE DATABASE IF NOT EXISTS ${instancia_add};
+  CREATE USER IF NOT EXISTS '${instancia_add}'@'localhost' IDENTIFIED BY '${mysql_root_password}';
+  GRANT ALL PRIVILEGES ON ${instancia_add}.* TO '${instancia_add}'@'localhost';
+  FLUSH PRIVILEGES;
 EOF
 
-sleep 2
-
+  sleep 2
 }
 
 #######################################
@@ -48,22 +50,21 @@ backend_set_env() {
   backend_url=${backend_url%%/*}
   backend_url=https://$backend_url
 
-  # ensure idempotency
   frontend_url=$(echo "${frontend_url/https:\/\/}")
   frontend_url=${frontend_url%%/*}
   frontend_url=https://$frontend_url
 
 sudo su - deploy << EOF
   cat <<[-]EOF > /home/deploy/${instancia_add}/backend/.env
-NODE_ENV=
+NODE_ENV=production
 BACKEND_URL=${backend_url}
 FRONTEND_URL=${frontend_url}
 PROXY_PORT=443
 PORT=${backend_port}
 
-DB_DIALECT=postgres
+DB_DIALECT=mysql
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=3306
 DB_USER=${instancia_add}
 DB_PASS=${mysql_root_password}
 DB_NAME=${instancia_add}
@@ -132,7 +133,7 @@ EOF
 }
 
 #######################################
-# updates frontend code
+# updates backend code
 # Arguments:
 #   None
 #######################################
@@ -153,51 +154,8 @@ backend_update() {
   npm install @types/fs-extra
   rm -rf dist 
   npm run build
-  npx sequelize db:migrate
-  npx sequelize db:migrate
-  npx sequelize db:seed
   pm2 start ${empresa_atualizar}-backend
   pm2 save 
-EOF
-
-  sleep 2
-}
-
-#######################################
-# runs db migrate
-# Arguments:
-#   None
-#######################################
-backend_db_migrate() {
-  print_banner
-  printf "${WHITE} 💻 Executando db:migrate...${GRAY_LIGHT}"
-  printf "\n\n"
-
-  sleep 2
-
-  sudo su - deploy <<EOF
-  cd /home/deploy/${instancia_add}/backend
-  npx sequelize db:migrate
-EOF
-
-  sleep 2
-}
-
-#######################################
-# runs db seed
-# Arguments:
-#   None
-#######################################
-backend_db_seed() {
-  print_banner
-  printf "${WHITE} 💻 Executando db:seed...${GRAY_LIGHT}"
-  printf "\n\n"
-
-  sleep 2
-
-  sudo su - deploy <<EOF
-  cd /home/deploy/${instancia_add}/backend
-  npx sequelize db:seed:all
 EOF
 
   sleep 2
@@ -226,7 +184,7 @@ EOF
 }
 
 #######################################
-# updates frontend code
+# sets up nginx for backend
 # Arguments:
 #   None
 #######################################
@@ -261,3 +219,4 @@ EOF
 
   sleep 2
 }
+
