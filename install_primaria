@@ -38,13 +38,51 @@ inquiry_options
 
 # dependencies related
 system_update
-system_node_install
-system_pm2_install
-system_docker_install
+
+# Verificar se Node.js está instalado
+if ! node -v > /dev/null 2>&1; then
+  echo "Node.js não encontrado, instalando..."
+  system_node_install
+else
+  echo "Node.js já está instalado, versão: $(node -v)"
+fi
+
+# Verificar se PM2 está instalado
+if ! pm2 -v > /dev/null 2>&1; then
+  echo "PM2 não encontrado, instalando..."
+  system_pm2_install
+else
+  echo "PM2 já está instalado, versão: $(pm2 -v)"
+fi
+
+# Verificar se Docker está instalado
+if ! docker -v > /dev/null 2>&1; then
+  echo "Docker não encontrado, instalando..."
+  system_docker_install
+else
+  echo "Docker já está instalado, versão: $(docker -v)"
+fi
+
+# Instalar outras dependências necessárias
 system_puppeteer_dependencies
 system_snapd_install
-system_nginx_install
-system_certbot_install
+
+# Verificar se NGINX está instalado
+if ! nginx -v > /dev/null 2>&1; then
+  echo "NGINX não encontrado, instalando..."
+  system_nginx_install
+else
+  echo "NGINX já está instalado, versão: $(nginx -v)"
+fi
+
+# Verificar se SSL está configurado antes de instalar Certbot
+if ! sudo certbot certificates > /dev/null 2>&1; then
+  echo "Certbot não encontrado ou SSL não configurado, instalando e configurando Certbot..."
+  system_certbot_install
+  system_certbot_setup
+else
+  echo "SSL já está configurado com Certbot."
+fi
 
 # system config
 system_create_user
@@ -70,4 +108,11 @@ frontend_nginx_setup
 # network related
 system_nginx_conf
 system_nginx_restart
-system_certbot_setup
+
+# Finalizar se SSL ainda não estiver configurado
+if ! sudo certbot certificates > /dev/null 2>&1; then
+  echo "Configurando Certbot para SSL..."
+  system_certbot_setup
+else
+  echo "Certbot já configurado."
+fi
