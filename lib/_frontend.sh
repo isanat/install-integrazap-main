@@ -14,10 +14,15 @@ frontend_node_dependencies() {
 
   sleep 2
 
-  sudo su - deploy <<EOF
-  cd /home/deploy/${instancia_add}/frontend
-  npm install
+  # Verificar se node_modules já existe
+  if [ ! -d "/home/deploy/${instancia_add}/frontend/node_modules" ]; then
+    sudo su - deploy <<EOF
+    cd /home/deploy/${instancia_add}/frontend
+    npm install
 EOF
+  else
+    printf "${YELLOW}As dependências do frontend já estão instaladas.${NC}\n"
+  fi
 
   sleep 2
 }
@@ -90,7 +95,7 @@ frontend_set_env() {
 sudo su - deploy << EOF
   cat <<[-]EOF > /home/deploy/${instancia_add}/frontend/.env
 REACT_APP_BACKEND_URL=${backend_url}
-REACT_APP_HOURS_CLOSE_TICKETS_AUTO = 24
+REACT_APP_HOURS_CLOSE_TICKETS_AUTO=24
 [-]EOF
 EOF
 
@@ -126,17 +131,22 @@ frontend_start_pm2() {
 
   sleep 2
 
-  sudo su - deploy <<EOF
-  cd /home/deploy/${instancia_add}/frontend
-  pm2 start server.js --name ${instancia_add}-frontend
-  pm2 save
+  # Verificar se PM2 já está rodando
+  if pm2 list | grep ${instancia_add}-frontend > /dev/null 2>&1; then
+    printf "${YELLOW}PM2 já está rodando para o frontend.${NC}\n"
+  else
+    sudo su - deploy <<EOF
+    cd /home/deploy/${instancia_add}/frontend
+    pm2 start server.js --name ${instancia_add}-frontend
+    pm2 save
 EOF
+  fi
 
- sleep 2
+  sleep 2
   
   sudo su - root <<EOF
    pm2 startup
-  sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u deploy --hp /home/deploy
+   sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u deploy --hp /home/deploy
 EOF
   sleep 2
 }
@@ -155,7 +165,9 @@ frontend_nginx_setup() {
 
   frontend_hostname=$(echo "${frontend_url/https:\/\/}")
 
-sudo su - root << EOF
+  # Verificar se a configuração do NGINX já existe
+  if [ ! -f "/etc/nginx/sites-available/${instancia_add}-frontend" ]; then
+    sudo su - root << EOF
 
 cat > /etc/nginx/sites-available/${instancia_add}-frontend << 'END'
 server {
@@ -177,6 +189,10 @@ END
 
 ln -s /etc/nginx/sites-available/${instancia_add}-frontend /etc/nginx/sites-enabled
 EOF
+  else
+    printf "${YELLOW}A configuração do NGINX já existe para o frontend.${NC}\n"
+  fi
 
   sleep 2
 }
+
